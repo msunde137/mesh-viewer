@@ -7,6 +7,12 @@
 namespace agl {
    class Mesh
    {
+   private:
+       float* m_Positions;
+       float* m_Normals;
+       unsigned int m_NumVertices;
+       unsigned int* m_Indices;
+       unsigned int m_NumIndices;
    public:
 
       Mesh();
