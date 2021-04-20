@@ -39,6 +39,11 @@ To run each program from build, you would type
 mesh-viewer/build $ ../bin/mesh-viewer
 ```
 
+# Features:
+- Loading and swapping meshes
+- Rotate and zoom with mousepad
+- Phong shader
+
 # Vertex Phong shading:
 <img width="252" alt="example1" src="https://user-images.githubusercontent.com/54864515/115323205-a9eb6300-a155-11eb-8b2a-e1d01dcd5b48.PNG">
 <img width="249" alt="example2" src="https://user-images.githubusercontent.com/54864515/115323206-a9eb6300-a155-11eb-9a70-b5e0bf9b8d5f.PNG">
