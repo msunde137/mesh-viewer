@@ -29,6 +29,20 @@ mat4 view;
 mat4 model;
 mat4 projection;
 
+// camera
+float fov = 45.0f;
+float near = 0.1f;
+float far = 3000.0f;
+vec3 eye(0, 0, -3);
+vec3 center(0, 0, 0);
+vec3 up(0, 1, 0);
+float zoomSpd = .1;
+float rotSpd = .1;
+
+// mouse
+vec2 mousepos;
+vec2 dmousepos;
+
 // window
 int width = 500;
 int height = 500;
@@ -52,7 +66,20 @@ void GLPrintUniformInfo(unsigned int program)
 static void LoadModel(int modelId)
 {
    assert(modelId >= 0 && modelId < theModelNames.size());
-   theModel.loadPLY(theModelNames[theCurrentModel]);
+   theCurrentModel = modelId;
+   theModel.loadPLY(theModelNames[modelId]);
+   
+   vec3 minbounds = theModel.getMinBounds();
+   vec3 absminbounds = glm::abs(minbounds);
+   vec3 maxbounds = theModel.getMaxBounds();
+   float viewdist = max({ 
+       absminbounds.x, absminbounds.y, absminbounds.z, 
+       maxbounds.x, maxbounds.y, maxbounds.z }) * 1.5;
+   vec3 modelcenter = (minbounds + maxbounds) / 2.0f;
+   zoomSpd = viewdist / 10;
+   eye = vec3(0, 0, -viewdist);
+   center = modelcenter;
+   up = vec3(0, 1, 0);
 
    glBindBuffer(GL_ARRAY_BUFFER, theVboPosId);
    glBufferData(GL_ARRAY_BUFFER, theModel.numVertices() * 3 * sizeof(float), theModel.positions(), GL_DYNAMIC_DRAW);
@@ -96,6 +123,9 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	
    // Set Viewport to window dimensions
    glViewport(0, 0, width, height);
+
+   // reset the projection matrix
+   projection = glm::perspective(fov, float(width) / float(height), near, far);
 }
 
 static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
@@ -122,7 +152,39 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 {
-   // TODO: Camera controls
+    int state = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
+    if (state == GLFW_PRESS)
+    {
+        dmousepos = glm::normalize(mousepos - vec2(xpos, ypos));
+        mousepos = vec2(xpos, ypos);
+        int keyPress = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT);
+        if (keyPress == GLFW_PRESS) 
+        {
+            float dir = dmousepos.y > 0 ? 1 : dmousepos.y < 0 ? -1 : 0;
+            vec3 dirvec = glm::normalize(eye) * dir * zoomSpd;
+            if (length(dirvec) < length(eye) || dir > 0) eye = eye + dirvec;
+        }
+        else
+        {
+            // horizontal rotation
+            float hozdir = dmousepos.x > 0 ? 1 : dmousepos.x < 0 ? -1 : 0;
+            float hozang = rotSpd * hozdir;
+            mat4 hozrot = glm::rotate(mat4(1), hozang, vec3(0, 1, 0));
+            eye = vec3(hozrot * vec4(eye, 0.0f));
+            up = vec3(hozrot * vec4(up, 0.0f));
+
+            // vertical rotation
+            vec3 axis = glm::normalize(glm::cross(glm::normalize(eye), up));
+            float vertdir = dmousepos.y > 0 ? -1 : dmousepos.y < 0 ? 1 : 0;
+            float vertang = rotSpd * vertdir;
+            eye = vec3(glm::rotate(mat4(1), vertang, axis) * vec4(eye, 0.0f));
+            up = glm::cross(axis, glm::normalize(eye));
+        }
+    }
+    else if (state == GLFW_RELEASE)
+    {
+        dmousepos = vec2(0);
+    }
 }
 
 static void PrintShaderErrors(GLuint id, const std::string label)
@@ -214,136 +276,164 @@ static GLuint LoadShader(const std::string& vertex, const std::string& fragment)
 
 int main(int argc, char** argv)
 {
-   GLFWwindow* window;
+    GLFWwindow* window;
 
-   if (!glfwInit())
-   {
-      return -1;
-   }
+    if (!glfwInit())
+    {
+        return -1;
+    }
 
-   // Explicitly ask for a 4.0 context 
-   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // Explicitly ask for a 4.0 context 
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-   /* Create a windowed mode window and its OpenGL context */
-   window = glfwCreateWindow(width, height, "Mesh Viewer", NULL, NULL);
-   if (!window)
-   {
-      glfwTerminate();
-      return -1;
-   }
+    /* Create a windowed mode window and its OpenGL context */
+    window = glfwCreateWindow(width, height, "Mesh Viewer", NULL, NULL);
+    if (!window)
+    {
+        glfwTerminate();
+        return -1;
+    }
 
-   // Make the window's context current 
-   glfwMakeContextCurrent(window);
+    // Make the window's context current 
+    glfwMakeContextCurrent(window);
 
-   glfwSetKeyCallback(window, key_callback);
-   glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-   glfwSetMouseButtonCallback(window, mouse_button_callback);
-   glfwSetScrollCallback(window, scroll_callback);
-   glfwSetCursorPosCallback(window, cursor_position_callback);
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwSetCursorPosCallback(window, cursor_position_callback);
 
 #ifndef APPLE
-   if (glewInit() != GLEW_OK)
-   {
-      return -1;
-   }
+    if (glewInit() != GLEW_OK)
+    {
+        return -1;
+    }
 #endif
 
-   glEnable(GL_DEPTH_TEST);
-   //glEnable(GL_CULL_FACE);
-   glClearColor(0, 0, 0, 1);
+    glEnable(GL_DEPTH_TEST);
+    //glEnable(GL_CULL_FACE);
+    glClearColor(0, 0, 0, 1);
 
-   glGenBuffers(1, &theVboPosId);
-   glGenBuffers(1, &theVboNormalId);
-   glGenBuffers(1, &theElementbuffer);
+    glGenBuffers(1, &theVboPosId);
+    glGenBuffers(1, &theVboNormalId);
+    glGenBuffers(1, &theElementbuffer);
 
-   GLuint vaoId;
-   glGenVertexArrays(1, &vaoId);
-   glBindVertexArray(vaoId);
+    GLuint vaoId;
+    glGenVertexArrays(1, &vaoId);
+    glBindVertexArray(vaoId);
 
-   glBindBuffer(GL_ARRAY_BUFFER, theVboPosId); // always bind before setting data
-   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (GLubyte*)NULL);
-   glEnableVertexAttribArray(0); // 0 -> Sending VertexPositions to array #0 in the active shader
+    glBindBuffer(GL_ARRAY_BUFFER, theVboPosId); // always bind before setting data
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLubyte*)NULL);
+    glEnableVertexAttribArray(0); // 0 -> Sending VertexPositions to array #0 in the active shader
+    glBindBuffer(GL_ARRAY_BUFFER, theVboNormalId); // always bind before setting data
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (GLubyte*)NULL);
+    glEnableVertexAttribArray(1); // 1 -> Sending Normals to array #1 in the active shader
 
-   glBindBuffer(GL_ARRAY_BUFFER, theVboNormalId); // always bind before setting data
-   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (GLubyte*)NULL);
-   glEnableVertexAttribArray(1); // 1 -> Sending Normals to array #1 in the active shader
+    // load model
+    LoadModels("../models/");
+    LoadModel(44);
 
-   // load model
-   LoadModels("../models/");
-   LoadModel(0);
-
-   float triangle[] = {
-        -0.5f, -0.5f, 0.0f, // left  
-         0.5f, -0.5f, 0.0f, // right 
-         0.0f,  0.5f, 0.0f  // top  
-   };
-   float triangle_norms[] = {
-       0.0f, 0.0f, 1.0f,
-       0.0f, 0.0f, 1.0f,
-       0.0f, 0.0f, 1.0f
-   };
-   unsigned int triangle_inds[]{
-       0, 1, 2
-   };
-
-   //glBindBuffer(GL_ARRAY_BUFFER, theVboPosId);
-   //glBufferData(GL_ARRAY_BUFFER, theModel.numVertices() * sizeof(float) * 3, theModel.positions(), GL_STATIC_READ);
-   //glBindBuffer(GL_ARRAY_BUFFER, theVboNormalId);
-   //glBufferData(GL_ARRAY_BUFFER, theModel.numVertices() * sizeof(float) * 3, theModel.normals(), GL_STATIC_READ);
-   //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, theElementbuffer);
-   //glBufferData(GL_ELEMENT_ARRAY_BUFFER, theModel.numTriangles() * sizeof(unsigned int) * 3, theModel.indices(), GL_STATIC_READ);
+    // triangles example
+    //float triangle[] = {
+    //    -0.5f, -0.5f, 0.0f, // left  
+    //    0.5f, -0.5f, 0.0f, // right 
+    //    0.0f,  0.5f, 0.0f,  // top  
+    //    -0.5f, -0.5f, -.5f,
+    //    0.5f, -0.5f,  -.5f,
+    //    0.0f,  0.5f,  -.5f,
+    //};
+    //float triangle_norms[] = {
+    //    0.0f, 0.0f, 1.0f,
+    //    0.0f, 0.0f, 1.0f,
+    //    0.0f, 0.0f, 1.0f,
+    //    0.0f, 0.0f, -1.0f,
+    //    0.0f, 0.0f, -1.0f,
+    //    0.0f, 0.0f, -1.0f
+    //};
+    //unsigned int triangle_inds[]{
+    //    0, 1, 2, 3, 4, 5
+    //};
+    //glBindBuffer(GL_ARRAY_BUFFER, theVboPosId);
+    //glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_READ);
+    //glBindBuffer(GL_ARRAY_BUFFER, theVboNormalId);
+    //glBufferData(GL_ARRAY_BUFFER, sizeof(triangle_norms), triangle_norms, GL_STATIC_READ);
+    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, theElementbuffer);
+    //glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(triangle_inds), triangle_inds, GL_STATIC_READ);
    
-   glBindBuffer(GL_ARRAY_BUFFER, theVboPosId);
-   glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_READ);
-   glBindBuffer(GL_ARRAY_BUFFER, theVboNormalId);
-   glBufferData(GL_ARRAY_BUFFER, sizeof(triangle_norms), triangle_norms, GL_STATIC_READ);
-   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, theElementbuffer);
-   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(triangle_inds), triangle_inds, GL_STATIC_READ);
-   
-   glBindBuffer(GL_ARRAY_BUFFER, 0);
-   glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 
-   // set model view projection
-   projection = glm::perspective(45.0f, float(width) / float(height), 1.0f, 150.0f);
-   view = glm::lookAt(vec3(0, 0, -3), vec3(0, 0, 0), vec3(0, 1, 0));
-   model = translate(mat4(1), vec3(0, 0, 0));
+    // set model view projection
+    projection = glm::perspective(fov, float(width) / float(height), near, far);
+    view = glm::lookAt(eye, center, up);
+    model = translate(mat4(1), vec3(0, 0, 0));
 
-   GLuint shaderId = LoadShader("../shaders/phong.vs", "../shaders/phong.fs");
-   glUseProgram(shaderId);
-   GLPrintUniformInfo(shaderId);
-   int loc;
-   loc = glGetUniformLocation(shaderId, "model");
-   glUniformMatrix4fv(loc, 1, GL_FALSE, &model[0][0]);
-   loc = glGetUniformLocation(shaderId, "view");
-   glUniformMatrix4fv(loc, 1, GL_FALSE, &view[0][0]);
-   loc = glGetUniformLocation(shaderId, "projection");
-   glUniformMatrix4fv(loc, 1, GL_FALSE, &projection[0][0]);
-   loc = glGetUniformLocation(shaderId, "color");
-   glUniform4f(loc, 1, 0, 0, 1);
+    GLuint shaderId = LoadShader("../shaders/phong(1).vs", "../shaders/phong(1).fs");
+    glUseProgram(shaderId);
+    GLPrintUniformInfo(shaderId);
+    int loc;
+    // MVP
+    loc = glGetUniformLocation(shaderId, "u_Model");
+    glUniformMatrix4fv(loc, 1, GL_FALSE, &model[0][0]);
+    loc = glGetUniformLocation(shaderId, "u_View");
+    glUniformMatrix4fv(loc, 1, GL_FALSE, &view[0][0]);
+    loc = glGetUniformLocation(shaderId, "u_Projection");
+    glUniformMatrix4fv(loc, 1, GL_FALSE, &projection[0][0]);
 
-   // Loop until the user closes the window 
-   while (!glfwWindowShouldClose(window))
-   {
-      glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the buffers
+    // Phong uniforms
+    loc = glGetUniformLocation(shaderId, "u_Diffuse");
+    glUniform4f(loc, 1, 0, 0, 1);
+    loc = glGetUniformLocation(shaderId, "u_Ambient");
+    glUniform4f(loc, .1, .1, .1, 1);
+    loc = glGetUniformLocation(shaderId, "u_LightCol");
+    glUniform4f(loc, 1, 1, 1, 1);
+    loc = glGetUniformLocation(shaderId, "u_Specular");
+    glUniform4f(loc, 1, 1, 1, 1);
+    loc = glGetUniformLocation(shaderId, "u_SpecInt");
+    glUniform1f(loc, 20);
 
-      // Draw primitive
-      glBindVertexArray(vaoId);
-      //glDrawArrays(GL_TRIANGLES, 0, 3);
-      glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void*)0);
+    // toon uniforms
+    //loc = glGetUniformLocation(shaderId, "u_Color1");
+    //glUniform4f(loc, 1, 0, 0, 1);
+    //loc = glGetUniformLocation(shaderId, "u_Color2");
+    //glUniform4f(loc, .1, .1, .1, 1);
+    //loc = glGetUniformLocation(shaderId, "u_Spec");
+    //glUniform4f(loc, 1, 1, 1, 1);
+    //loc = glGetUniformLocation(shaderId, "u_SpecSize");
+    //glUniform1f(loc, .1f);
 
-      // Swap front and back buffers
-      glfwSwapBuffers(window);
+    // Loop until the user closes the window 
+    while (!glfwWindowShouldClose(window))
+    {
+        // update uniforms
+        {
+            view = glm::lookAt(eye, center, up);
+            loc = glGetUniformLocation(shaderId, "u_View");
+            glUniformMatrix4fv(loc, 1, GL_FALSE, &view[0][0]);
+            loc = glGetUniformLocation(shaderId, "u_Projection");
+            glUniformMatrix4fv(loc, 1, GL_FALSE, &projection[0][0]);
+        }
 
-      // Poll for and process events
-      glfwPollEvents();
-   }
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the buffers
 
-   glfwTerminate();
-   return 0;
+        // Draw primitive
+        glBindVertexArray(vaoId);
+        //glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawElements(GL_TRIANGLES, theModel.numTriangles() * 3, GL_UNSIGNED_INT, (void*)0);
+
+        // Swap front and back buffers
+        glfwSwapBuffers(window);
+
+        // Poll for and process events
+        glfwPollEvents();
+    }
+
+    glfwTerminate();
+    return 0;
 }
 
 

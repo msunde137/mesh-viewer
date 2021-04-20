@@ -17,10 +17,17 @@ Mesh::Mesh()
 
 Mesh::~Mesh()
 {
+	delete[] m_Positions;
+	delete[] m_Normals;
+	delete[] m_Indices;
 }
 
 bool Mesh::loadPLY(const std::string& filename)
 {
+	delete[] m_Positions;
+	delete[] m_Normals;
+	delete[] m_Indices;
+
 	FILE* file;
 	fopen_s(&file, filename.c_str(), "rb");
 	if (file == NULL)
@@ -53,8 +60,8 @@ bool Mesh::loadPLY(const std::string& filename)
 			{
 				int num_faces = 0;
 				sscanf(line, "%*s %*s %d", &num_faces);
-				m_NumIndices = num_faces;
-				m_Indices = new unsigned int[m_NumIndices * 3]; // todo: remove 3
+				m_NumTriangles = num_faces;
+				m_Indices = new unsigned int[m_NumTriangles * 3]; // todo: remove 3
 			}
 			else
 			{
@@ -67,7 +74,7 @@ bool Mesh::loadPLY(const std::string& filename)
 			if (strstr(line, "float"))
 				formats[formats.size() - 1].append("%f ");
 			else if (strstr(line, "uchar"))
-				formats[formats.size() - 1].append("%*u %u %u %u"); // not handling all cases here
+				formats[formats.size() - 1].append("%u %u %u"); // not handling all cases here
 			else
 			{
 				printf("type name not recognized\n");
@@ -91,7 +98,8 @@ bool Mesh::loadPLY(const std::string& filename)
 	}	
 
 	formats[0].pop_back();
-	for (int i = 0; i < m_NumVertices || !feof(file); i++)
+	formats[1] = "%*u " + formats[1];
+	for (int i = 0; i < m_NumVertices * 3 && !feof(file); i+=3)
 	{
 		fgets(line, line_size, file);
 		float a = 0;
@@ -99,9 +107,24 @@ bool Mesh::loadPLY(const std::string& filename)
 			&m_Positions[i], &m_Positions[i + 1], &m_Positions[i + 2],
 			&m_Normals[i], &m_Normals[i + 1], &m_Normals[i + 2]
 		);
+
+		if (i == 0)
+		{
+			m_MinBounds = vec3(m_Positions[i], m_Positions[i + 1], m_Positions[i + 2]);
+			m_MaxBounds = vec3(m_Positions[i], m_Positions[i + 1], m_Positions[i + 2]);
+		}
+		else
+		{
+			m_MinBounds.x = m_Positions[i] < m_MinBounds.x ? m_Positions[i] : m_MinBounds.x;
+			m_MinBounds.y = m_Positions[i + 1] < m_MinBounds.y ? m_Positions[i + 1] : m_MinBounds.y;
+			m_MinBounds.z = m_Positions[i + 2] < m_MinBounds.z ? m_Positions[i + 2] : m_MinBounds.z;
+			m_MaxBounds.x = m_Positions[i] > m_MaxBounds.x ? m_Positions[i] : m_MaxBounds.x;
+			m_MaxBounds.y = m_Positions[i + 1] > m_MaxBounds.y ? m_Positions[i + 1] : m_MaxBounds.y;
+			m_MaxBounds.z = m_Positions[i + 2] > m_MaxBounds.z ? m_Positions[i + 2] : m_MaxBounds.z;
+		}
 	}
 
-	for (int i = 0; i < m_NumIndices || !feof(file); i++)
+	for (int i = 0; i < m_NumTriangles * 3 && !feof(file); i+=3)
 	{
 		fgets(line, line_size, file);
 		sscanf(line, formats[1].c_str(),
@@ -114,22 +137,22 @@ bool Mesh::loadPLY(const std::string& filename)
 
 glm::vec3 Mesh::getMinBounds() const
 {
-  return vec3(0);
+	return m_MinBounds;
 }
 
 glm::vec3 Mesh::getMaxBounds() const
 {
-  return vec3(0);
+	return m_MaxBounds;
 }
 
 int Mesh::numVertices() const
 {
-   return 0;
+   return m_NumVertices;
 }
 
 int Mesh::numTriangles() const
 {
-   return 0;
+   return m_NumTriangles;
 }
 
 float* Mesh::positions() const

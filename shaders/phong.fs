@@ -1,9 +1,9 @@
 #version 400
 
-uniform vec4 color;
+in vec4 v_Light;
 out vec4 FragColor;
 void main()
 {
-   FragColor = color;
+   FragColor = v_Light;
 }
 

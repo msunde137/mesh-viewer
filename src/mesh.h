@@ -10,9 +10,11 @@ namespace agl {
    private:
        float* m_Positions;
        float* m_Normals;
+       glm::vec3 m_MaxBounds;
+       glm::vec3 m_MinBounds;
        unsigned int m_NumVertices;
        unsigned int* m_Indices;
-       unsigned int m_NumIndices;
+       unsigned int m_NumTriangles;
    public:
 
       Mesh();
