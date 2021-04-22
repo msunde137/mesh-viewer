@@ -108,6 +108,8 @@ bool Mesh::loadPLY(const std::string& filename)
 			&m_Normals[i], &m_Normals[i + 1], &m_Normals[i + 2]
 		);
 
+		m_AvgPos = m_AvgPos + vec3(m_Positions[i], m_Positions[i + 1], m_Positions[i + 2]);
+
 		if (i == 0)
 		{
 			m_MinBounds = vec3(m_Positions[i], m_Positions[i + 1], m_Positions[i + 2]);
@@ -123,7 +125,7 @@ bool Mesh::loadPLY(const std::string& filename)
 			m_MaxBounds.z = m_Positions[i + 2] > m_MaxBounds.z ? m_Positions[i + 2] : m_MaxBounds.z;
 		}
 	}
-
+	m_AvgPos = m_AvgPos / (float)m_NumVertices;
 	for (int i = 0; i < m_NumTriangles * 3 && !feof(file); i+=3)
 	{
 		fgets(line, line_size, file);
@@ -143,6 +145,11 @@ glm::vec3 Mesh::getMinBounds() const
 glm::vec3 Mesh::getMaxBounds() const
 {
 	return m_MaxBounds;
+}
+
+glm::vec3 agl::Mesh::getAvgPosition() const
+{
+	return m_AvgPos;
 }
 
 int Mesh::numVertices() const

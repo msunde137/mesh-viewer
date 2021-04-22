@@ -371,7 +371,7 @@ int main(int argc, char** argv)
     view = glm::lookAt(eye, center, up);
     model = translate(mat4(1), vec3(0, 0, 0));
 
-    GLuint shaderId = LoadShader("../shaders/phong(1).vs", "../shaders/phong(1).fs");
+    GLuint shaderId = LoadShader("../shaders/phong.vs", "../shaders/phong.fs");
     glUseProgram(shaderId);
     GLPrintUniformInfo(shaderId);
     int loc;

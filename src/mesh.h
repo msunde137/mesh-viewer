@@ -12,6 +12,7 @@ namespace agl {
        float* m_Normals;
        glm::vec3 m_MaxBounds;
        glm::vec3 m_MinBounds;
+       glm::vec3 m_AvgPos = { 0, 0, 0 };
        unsigned int m_NumVertices;
        unsigned int* m_Indices;
        unsigned int m_NumTriangles;
@@ -30,6 +31,8 @@ namespace agl {
 
       // Return the maximum point of the axis-aligned bounding box
       glm::vec3 getMaxBounds() const;
+
+      glm::vec3 getAvgPosition() const;
 
       // Return number of vertices in this model
       int numVertices() const;
